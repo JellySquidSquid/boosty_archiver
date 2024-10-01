@@ -1,0 +1,10 @@
+__pycache__/
+**/
+*.db
+cookies.txt
+*cookies.txt
+cookies*.txt
+token.txt
+.env
+*.sh
+*.bat

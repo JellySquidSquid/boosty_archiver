@@ -1,0 +1,12 @@
+# ? HTTP requests
+httpx
+orjson
+# ? CLI
+typer
+rich
+# ? Detecting image extension
+python-magic-bin; sys_platform == "win32"
+python-magic; sys_platform != "win32"
+# ? Parsing HTML
+# beautifulsoup4
+# html5lib
