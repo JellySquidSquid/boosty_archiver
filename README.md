@@ -1,5 +1,13 @@
 # Boosty archiver
 
+This small project added as a self-made solution to archive from Boosty.
+
+It save post text, images and files in a format: `PostIntID_PostUUID_Title_Index_Filename.Extension`
+Where int id used for sorting and UUID used in URL for posts.
+Post text saved with similar format as `.txt`, used to save passwords.
+
+Also all links that found in all posts exported in file `_post_links.txt` in a text table format `PostIntID	PostURL	URL` - separated by tabs, one URL per line. Used to export Google Drive, Mega and other links. Sorted by int id. It also keep old links in case your subscription is ended or old post moved to higher tier, this way if you not delete those links they will kept forever. They also would be kept even if they are updated in post.
+
 ## Requirements
 
 Python libraries:
@@ -25,8 +33,10 @@ Python libraries:
 
 ```sh
 .\boosty_archiver.py <NAME_OR_URL> [NAME2] [NAME3]
+.\boosty_archiver.py --use-db <NAME_OR_URL>
 ```
 You either provide just name or whole URL to profile(s).
+When DB is used, it will write downloads into sqlite3 file and check on future import if file was already downloaded. However it does not check file size this way if it was updated. When not using DB, it will check at least size from API with file size before attempting to redownload.
 
 ## Help command
 
@@ -56,3 +66,7 @@ You either provide just name or whole URL to profile(s).
 │ --db-path                   PATH  Specify custom DB path [default: None]                                             │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
+
+`token.txt` and `--token`/`-T` does not need to have `Bearer ` prefix
+
+`cookies.txt` use standard spec: [**Netscape HTTP Cookie File**](http://curl.haxx.se/rfc/cookie_spec.html)
