@@ -50,10 +50,12 @@ MIME_TO_EXTENSION: dict[str, str] = {
 }
 
 # ? DB
-DB_PATH = Path("archive.db")
+DB_PATH = Path(__file__).parent / "archive.db"
 CREATE_TABLE = "CREATE TABLE IF NOT EXISTS archive (entry PRIMARY KEY) WITHOUT ROWID;"
 CHECK_ENTRY = "SELECT EXISTS(SELECT true FROM archive WHERE entry = '{entry}');"
 INSERT_ENTRY = "INSERT INTO archive (entry) VALUES ('{entry}') ON CONFLICT DO NOTHING;"
+
+USER_CHECK: re.Pattern[str] = re.compile(r"^(?P<domain>https?:\/\/(?:www\.)?boosty\.to\/)?(?P<user>[\w\-]+)", flags=re.IGNORECASE)
 
 FILENAME_REPLACEMENTS: Sequence[tuple[str, str]] = [
     ("\\", "⧹"),
@@ -291,7 +293,7 @@ def handle_file(
                     f.write(chunk)
                     ctx.progress_download.update(ctx.download, completed=stream.num_bytes_downloaded)
 
-                ctx.progress_download.update(ctx.download, visible=False)
+                ctx.progress_download.update(ctx.download, completed=0, visible=False)
                 ctx.progress_download.stop_task(ctx.download)
     except httpx.TimeoutException:
         ctx.progress.print(f"[red italic]Timeout exception: {final_url}[/red italic]")
@@ -393,7 +395,7 @@ def handle_image(
                     f.write(chunk)
                     ctx.progress_download.update(ctx.download, completed=stream.num_bytes_downloaded)
 
-            ctx.progress_download.update(ctx.download, visible=False)
+            ctx.progress_download.update(ctx.download, completed=0, visible=False)
             ctx.progress_download.stop_task(ctx.download)
     except httpx.TimeoutException:
         ctx.progress.print(f"[red italic]Timeout exception: {url}[/red italic]")
@@ -586,7 +588,7 @@ def archive_user(
     Archiving user by URL / user name
     """
 
-    if not (match := re.match(r"^(?P<domain>https?:\/\/(?:www\.)?boosty\.to\/)(?P<user>[\w\-]+)", url, flags=re.IGNORECASE)):
+    if not (match := USER_CHECK.match(url)):
         ctx.progress.print("URL is not supported")
         return
 

@@ -2,8 +2,8 @@
 
 This small project added as a self-made solution to archive from Boosty.
 
-It save post text, images and files in a format: `PostIntID_PostUUID_Title_Index_Filename.Extension`
-Where int id used for sorting and UUID used in URL for posts.
+It save post text, images and files in a format: `PostIntID_Title_Index_Filename.Extension`
+
 Post text saved with similar format as `.txt`, used to save passwords.
 
 Also all links that found in all posts exported in file `_post_links.txt` in a text table format `PostIntID	PostURL	URL` - separated by tabs, one URL per line. Used to export Google Drive, Mega and other links. Sorted by int id. It also keep old links in case your subscription is ended or old post moved to higher tier, this way if you not delete those links they will kept forever. They also would be kept even if they are updated in post.
