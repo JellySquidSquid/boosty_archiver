@@ -4,7 +4,7 @@ Boosty downloader
 Run with --help argument to see arguments.
 """
 
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, NotRequired, TypedDict
 from collections import deque
 from collections.abc import Iterator, Sequence
 from contextlib import closing, suppress
@@ -90,11 +90,15 @@ class Subscription(TypedDict):
 
 
 class InitialStateBlogBlogData(TypedDict):
-    """Only nessesary fields are typed, others are omitted"""
+    """
+    Only nessesary fields are typed, others are omitted
+
+    "signedQuery" not present when authentication is not successful
+    """
 
     blogUrl: str
     coverUrl: str
-    signedQuery: str
+    signedQuery: NotRequired[str]
     description: Sequence[dict]
     socialLinks: Sequence[Social]
     subscription: Subscription
@@ -138,12 +142,16 @@ class CurrentUser(TypedDict):
 
 
 class User(TypedDict):
-    """Only nessesary fields are typed, others are omitted"""
+    """
+    Only nessesary fields are typed, others are omitted
+
+    "signedQuery" not present when authentication is not successful
+    """
 
     isSubscribed: bool
     subscription: dict | None
     subscriptionKind: Literal["paid", "free", "none"]
-    signedQuery: str
+    signedQuery: NotRequired[str]
 
 
 class PostDataText(TypedDict):
@@ -174,24 +182,30 @@ class PostDataFile(TypedDict):
 
 
 class PostDataImage(TypedDict):
+    """NOTE: When file deleted from CDN, "width", "height", "size" are not present and any image URL redirect to https://images.boosty.to/stubs/default.png"""
+
     type: Literal["image"]
     id: str  # UUID
-    height: int
+    height: NotRequired[int]
     rendition: str
-    size: int
+    size: NotRequired[int]
     url: str  # e.g. "https://images.boosty.to/image/00000000-0000-0000-0000-000000000000?change_time=0000000000" - unix time
-    width: int
+    width: NotRequired[int]
 
 
 class Posts(TypedDict):
-    """Only nessesary fields are typed, others are omitted"""
+    """
+    Only nessesary fields are typed, others are omitted
+
+    "signedQuery" not present when authentication is not successful
+    """
 
     id: str  # UUID
     int_id: int
     title: str
     hasAccess: bool
     data: Sequence[PostDataText | PostDataLink | PostDataFile | PostDataImage]
-    signedQuery: str  # ? str | undefined
+    signedQuery: NotRequired[str]
 
 
 class PostsExtra(TypedDict):
@@ -219,6 +233,7 @@ class ProgressContext:
 
 
 def handle_file(
+    *,
     client: httpx.Client,
     headers: dict[str, str],
     int_id: int,
@@ -226,7 +241,7 @@ def handle_file(
     incremental_id: int,
     url: str,
     filename: str,
-    size: int,
+    size: int | None = None,
     is_migrated: bool,
     user: str,
     output_dir: Path,
@@ -243,11 +258,15 @@ def handle_file(
     path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}"
     entry = f"boosty_{user}_{int_id}_{incremental_id}"
 
+    if size is None:
+        ctx.progress.print("[yellow]Skipping downloading deleted file from CDN:[/yellow]", final_url)
+        return
+
     if not force_redownload and db_conn:
         with db_conn as cur, suppress(ValueError, sqlite3.Error):
             [[check]] = cur.execute(CHECK_ENTRY.format(entry=entry))
             if check:
-                ctx.progress.print(f"[yellow]Skipping downloaded image ({size:_} B):[/yellow]", url, "(DB)")
+                ctx.progress.print(f"[yellow]Skipping downloaded file ({size:_} B):[/yellow]", url, "(DB)")
                 return
 
     elif not force_redownload and path.exists() and path.stat().st_size == size:
@@ -315,6 +334,7 @@ def handle_file(
 
 
 def handle_image(
+    *,
     client: httpx.Client,
     headers: dict[str, str],
     int_id: int,
@@ -324,9 +344,9 @@ def handle_image(
     filename: str,
     user: str,
     output_dir: Path,
-    width: int,
-    height: int,
-    size: int,
+    width: int | None = None,
+    height: int | None = None,
+    size: int | None = None,
     ctx: ProgressContext,
     force_redownload: bool = False,
     db_conn: sqlite3.Connection | None = None,
@@ -334,6 +354,10 @@ def handle_image(
     """
     Handle image downloads. Extension is not known, so has to be guessed with magic
     """
+
+    if width is None or height is None or size is None:
+        ctx.progress.print("[yellow]Skipping downloading deleted image from CDN:[/yellow]", url)
+        return
 
     try:
         with client.stream("GET", url, headers=headers, timeout=60.0) as stream:
@@ -481,8 +505,8 @@ def handle_posts(
     """
 
     for post in posts:
-        if post.get("signedQuery"):
-            signed_query = post["signedQuery"]
+        if _sq := post.get("signedQuery"):
+            signed_query = _sq
 
         post_id: str = post["id"]
         int_id: int = post["int_id"]
@@ -536,9 +560,9 @@ def handle_posts(
                         filename=d["id"],
                         user=user,
                         output_dir=output_dir,
-                        width=d["width"],
-                        height=d["height"],
-                        size=d["size"],
+                        width=d.get("width"),
+                        height=d.get("height"),
+                        size=d.get("size"),
                         ctx=ctx,
                         force_redownload=force_redownload,
                         db_conn=db_conn,
@@ -557,6 +581,10 @@ def handle_posts(
 
                 # if "password" in parse_text(raw_text).lower():
                 #     found_password = True
+            else:
+                ctx.progress.print("\n\n[red italic]Unsupported data type:[/red italic]", d["type"])
+                rich.inspect(d, title="Video data example", docs=False)
+                ctx.progress.print(end="\n\n")
 
         # if found_password:
         cleared_post_text = clear_post_text(post_text).strip()
