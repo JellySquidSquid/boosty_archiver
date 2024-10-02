@@ -583,7 +583,7 @@ def handle_posts(
                 #     found_password = True
             else:
                 ctx.progress.print("\n\n[red italic]Unsupported data type:[/red italic]", d["type"])
-                rich.inspect(d, title="Video data example", docs=False)
+                rich.inspect(d, title="Unsupported data example", docs=False)
                 ctx.progress.print(end="\n\n")
 
         # if found_password:
