@@ -33,11 +33,12 @@ __version__ = "2024.10.01"
 
 # ? API
 API_PREFIX = "https://api.boosty.to/v1/"
+API_POSTS_PER_PAGE = 100
 API_GET_CURRENT_USER = f"{API_PREFIX}user/current"
 API_GET_SUBSCRIPTIONS = f"{API_PREFIX}user/subscriptions?limit=30&with_follow=false"  # include / exclude followers
 API_GET_USER = f"{API_PREFIX}blog/{{user}}"
-API_GET_POSTS_FIRST = f"{API_PREFIX}blog/{{user}}/post/?limit=10&comments_limit=0&reply_limit=0&is_only_allowed=false"
-API_GET_POSTS = f"{API_PREFIX}blog/{{user}}/post/?limit=10&offset={{offset}}&comments_limit=0&reply_limit=0&is_only_allowed=false"
+API_GET_POSTS_FIRST = f"{API_PREFIX}blog/{{user}}/post/?limit={API_POSTS_PER_PAGE}&comments_limit=0&reply_limit=0&is_only_allowed=false"
+API_GET_POSTS = f"{API_PREFIX}blog/{{user}}/post/?limit={API_POSTS_PER_PAGE}&offset={{offset}}&comments_limit=0&reply_limit=0&is_only_allowed=false"
 
 # ? Image extension detection with magic
 # NOTE: avif and jxl is not supported yet by magic, they detected as "application/octet-stream"
@@ -359,6 +360,15 @@ def handle_image(
         ctx.progress.print("[yellow]Skipping downloading deleted image from CDN:[/yellow]", url)
         return
 
+    entry = f"boosty_{user}_{int_id}_{incremental_id}"
+
+    if not force_redownload and db_conn:
+        with db_conn as cur, suppress(ValueError, sqlite3.Error):
+            [[check]] = cur.execute(CHECK_ENTRY.format(entry=entry))
+            if check:
+                ctx.progress.print(f"[yellow]Skipping downloaded image ({size:_} B):[/yellow]", url, "(DB)")
+                return
+
     try:
         with client.stream("GET", url, headers=headers, timeout=60.0) as stream:
             if stream.is_server_error:
@@ -398,16 +408,8 @@ def handle_image(
             extension = MIME_TO_EXTENSION.get(mime_type, "png")
 
             path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}.{extension}"
-            entry = f"boosty_{user}_{int_id}_{incremental_id}"
 
-            if not force_redownload and db_conn:
-                with db_conn as cur, suppress(ValueError, sqlite3.Error):
-                    [[check]] = cur.execute(CHECK_ENTRY.format(entry=entry))
-                    if check:
-                        ctx.progress.print(f"[yellow]Skipping downloaded image ({size:_} B):[/yellow]", url, "(DB)")
-                        return
-
-            elif not force_redownload and path.exists() and path.stat().st_size == size:
+            if not force_redownload and path.exists() and path.stat().st_size == size:
                 ctx.progress.print(f"[yellow]Skipping downloaded image ({size:_} B):[/yellow]", url)
                 return
 
