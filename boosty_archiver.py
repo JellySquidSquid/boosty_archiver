@@ -48,6 +48,18 @@ MIME_TO_EXTENSION: dict[str, str] = {
     "image/x-ms-bmp": "bmp",
     "image/webp": "webp",
     "image/svg+xml": "svg",
+    "video/webm": "webm",
+    "video/mp4": "mp4",
+    "video/x-matroska": "mkv",
+    "video/x-msvideo": "avi",
+    "video/quicktime": "mov",
+    "audio/mpeg": "mp3",
+    "audio/x-wav": "wav",
+    "audio/x-flac": "flac",
+    "audio/x-m4a": "m4a",
+    "video/ogg": "ogv",
+    "audio/ogg": "ogg",  # ? .opus also guessed as audio/ogg by magic
+    "audio/x-hx-aac-adts": "aac",
 }
 
 # ? DB
@@ -71,6 +83,8 @@ FILENAME_REPLACEMENTS: Sequence[tuple[str, str]] = [
 ]
 
 FILENAME_CONTROLS: re.Pattern[str] = re.compile(r"[\000-\031]")
+
+VIDEO_QUALITY_ORDER: Sequence[str] = ("ultra_hd", "quad_hd", "full_hd", "high", "medium", "tiny", "low", "lowest")
 
 # ? Models
 
@@ -182,6 +196,169 @@ class PostDataFile(TypedDict):
     url: str  # NOTE: url is https://cdn.boosty.to/file/00000000-0000-0000-0000-0000000000000 need migrate to https://cdn.boosty.to/file/00000000-0000-0000-0000-0000000000000?user_id=0000000&content_id=00000000-0000-0000-0000-0000000000000&expire_time=0000000000&sign=0000000000000000000000000000000000000000000000000000000000000000&is_migrated=true
 
 
+type PostDataVideoURLsType = Literal[
+    "live_cmaf",
+    "live_playback_dash",
+    "ultra_hd",
+    "live_playback_hls",
+    "hls",
+    "live_ondemand_hls",
+    "lowest",
+    "tiny",
+    "high",
+    "medium",
+    "full_hd",
+    "live_dash",
+    "dash_uni",
+    "low",
+    "live_hls",
+    "quad_hd",
+    "dash",
+]
+
+
+class PostDataVideoURLs(TypedDict):
+    """
+    NOTE: seems like when video does not have specified type (quality preset), url = ""
+
+    Regular static .mp4 ~720p upload have this types: ["hls", "lowest", "tiny', "medium", "low", "dash"]
+
+    URL look like this:
+    https://vd123.okcdn.ru/video.m3u8?cmd=videoPlayerCdn&expires=0000000000000&srcIp=1.2.3.4&pr=12&srcAg=UNKNOWN&ms=1.2.3.4&type=2&sig=00000000000&ct=8&urls=1.2.3.4&clientType=18&id=0000000000000
+    https://vd123.okcdn.ru/?expires=0000000000000&srcIp=1.2.3.4&pr=42&srcAg=UNKNOWN&ms=1.2.3.4&type=0&sig=00000000000&ct=0&urls=1.2.3.4&clientType=18&id=0000000000000
+
+    Where:
+    * expires - unix timestamp
+    * srcIp, ms, urls - 3 different IPs
+    * pr - seems always = 42
+    * ct - seems always = 0 for static types and 8 for hls, 6 for dash
+    * clientType - seems always = 18
+    * srcAg - seems always = UNKNOWN
+    * type - is integer representation of text type
+        * hls = 2
+        * lowest = 0
+        * tiny = 4
+        * medium = 2
+        * low = 1
+        * dash = 1
+
+    Approximate priority:
+    ultra_hd > quad_hd > full_hd > high > medium > tiny > low > lowest
+    hls and dash seems to use highest quality
+    """
+
+    type: PostDataVideoURLsType
+    url: str
+
+
+class PostDataVideo(TypedDict):
+    """
+    Example JSON:
+
+    ```json
+    {
+        "height":480,
+        "showViewsCounter":true,
+        "viewsCounter":0,
+        "timeCode":5,
+        "complete":true,
+        "uploadStatus": "ok",
+        "playerUrls": [
+            {"type": "live_cmaf", "url": ""},
+            {"url": "", "type": "live_playback_dash"},
+            {"type": "ultra_hd", "url": ""},
+            {"url": "", "type": "live_playback_hls"},
+            {"type": "hls", "url": "https://vd123.okcdn.ru/video.m3u8?cmd=videoPlayerCdn&expires=0000000000000&srcIp=1.2.3.4&pr=42&srcAg=UNKNOWN&ms=1.2.3.4&type=2&sig=00000000000&ct=8&urls=1.2.3.4&clientType=18&id=0000000000000"},
+            {"type": "live_ondemand_hls", "url": ""},
+            {"url": "https://vd123.okcdn.ru/?expires=0000000000000&srcIp=1.2.3.4&pr=42&srcAg=UNKNOWN&ms=1.2.3.4&type=0&sig=00000000000&ct=0&urls=1.2.3.4&clientType=18&id=0000000000000", "type": "lowest"},
+            {"url": "https://vd123.okcdn.ru/?expires=0000000000000&srcIp=1.2.3.4&pr=42&srcAg=UNKNOWN&ms=1.2.3.4&type=4&sig=00000000000&ct=0&urls=1.2.3.4&clientType=18&id=0000000000000", "type": "tiny"},
+            {"type": "high", "url": ""},
+            {"type": "medium", "url": "https://vd123.okcdn.ru/?expires=0000000000000&srcIp=1.2.3.4&pr=42&srcAg=UNKNOWN&ms=1.2.3.4&type=2&sig=00000000000&ct=0&urls=1.2.3.4&clientType=18&id=0000000000000"},
+            {"url": "", "type": "full_hd"},
+            {"type": "live_dash", "url": ""},
+            {"type": "dash_uni", "url": ""},
+            {"type": "low", "url": "https://vd123.okcdn.ru/?expires=0000000000000&srcIp=1.2.3.4&pr=42&srcAg=UNKNOWN&ms=1.2.3.4&type=1&sig=00000000000&ct=0&urls=1.2.3.4&clientType=18&id=0000000000000"},
+            {"type": "live_hls", "url": ""},
+            {"type": "quad_hd", "url": ""},
+            {"url": "https://vd123.okcdn.ru/?expires=0000000000000&srcIp=1.2.3.4&pr=42&srcAg=UNKNOWN&ms=1.2.3.4&type=1&sig=00000000000&ct=6&urls=1.2.3.4&clientType=18&id=0000000000000", "type": "dash"}
+        ],
+        "duration":34,
+        "vid": "0000000000000",
+        "width": 754,
+        "failoverHost": "vd234.okcdn.ru",
+        "preview": "https://i.okcdn.ru/videoPreview?id=0000000000000&type=39&idx=13&tkn=0000000000000000-0000000000",
+        "defaultPreview": "https://i.okcdn.ru/videoPreview?id=0000000000000&type=39&idx=13&tkn=0000000000000000-0000000000",
+        "url": "",
+        "title": "Title",
+        "type": "ok_video",
+        "id": "00000000-0000-0000-0000-000000000000"
+    }
+    ```
+    """  # noqa: E501
+
+    type: Literal["ok_video"]
+    complete: bool
+    id: str
+    height: int
+    showViewsCounter: bool
+    viewsCounter: NotRequired[int]
+    timeCode: int
+    uploadStatus: Literal["ok"] | str  # noqa: PYI051 # TODO: other statuses?
+    playerUrls: Sequence[PostDataVideoURLs]
+    duration: NotRequired[int]
+    vid: str
+    width: int
+    failoverHost: NotRequired[str]
+    preview: str
+    defaultPreview: str
+    url: NotRequired[str]
+    title: str
+
+
+class PostDataAudio(TypedDict):
+    """
+    Example JSON:
+
+    ```json
+    {
+        "uploadStatus": "",
+        "timeCode": 0,
+        "complete": True,
+        "size": 7526176,
+        "viewsCounter": 0,
+        "showViewsCounter": True,
+        "track": "Day and Night",
+        "duration": 188,
+        "url": "https://cdn.boosty.to/audio/b46f05b1-c6d1-4a10-8791-6a65077aa1c2",
+        "album": "Shiki Original Soundtrack Mini Album ''Rouge''",
+        "title": "Day and Night.mp3",
+        "artist": "Yasuharu Takanashi",
+        "id": "b46f05b1-c6d1-4a10-8791-6a65077aa1c2",
+        "isMigrated": True,
+        "fileType": "MP3",
+        "type": "audio_file"
+    }
+    ```
+    """
+
+    type: Literal["audio_file"]
+    complete: bool
+    id: str
+    isMigrated: bool
+    uploadStatus: str
+    timeCode: int
+    size: int
+    viewsCounter: NotRequired[int]
+    showViewsCounter: bool
+    track: NotRequired[str]  # ? from file metadata
+    duration: int
+    url: str
+    album: NotRequired[str]  # ? from file metadata
+    title: str  # ? filename
+    artist: NotRequired[str]  # ? from file metadata
+    fileType: Literal["MP3"] | str  # noqa: PYI051 # TODO: other types?
+
+
 class PostDataImage(TypedDict):
     """NOTE: When file deleted from CDN, "width", "height", "size" are not present and any image URL redirect to https://images.boosty.to/stubs/default.png"""
 
@@ -205,8 +382,9 @@ class Posts(TypedDict):
     int_id: int
     title: str
     hasAccess: bool
-    data: Sequence[PostDataText | PostDataLink | PostDataFile | PostDataImage]
+    data: Sequence[PostDataText | PostDataLink | PostDataFile | PostDataVideo | PostDataAudio | PostDataImage]
     signedQuery: NotRequired[str]
+    poll: NotRequired[dict]
 
 
 class PostsExtra(TypedDict):
@@ -403,13 +581,13 @@ def handle_image(
 
             iterator: Iterator[bytes] = stream.iter_bytes(chunk_size=16_384)
 
-            chunk = next(iterator)
+            chunk: bytes = next(iterator)
             mime_type: str = magic.from_buffer(chunk, mime=True)
-            extension = MIME_TO_EXTENSION.get(mime_type, "png")
+            extension: str = MIME_TO_EXTENSION.get(mime_type, "png")
 
             path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}.{extension}"
 
-            if not force_redownload and path.exists() and path.stat().st_size == size:
+            if not force_redownload and not db_conn and path.exists() and path.stat().st_size == size:
                 ctx.progress.print(f"[yellow]Skipping downloaded image ({size:_} B):[/yellow]", url)
                 return
 
@@ -434,6 +612,242 @@ def handle_image(
         return
     except httpx.StreamError as e:
         rich.inspect(e, title=f"Streaming image error: {url}")
+        return
+
+    if db_conn:
+        with db_conn as cur, suppress(sqlite3.Error):
+            cur.execute(INSERT_ENTRY.format(entry=entry))
+            cur.commit()
+
+
+def best_video(urls: dict[PostDataVideoURLsType, str], /) -> tuple[str, str] | tuple[None, None]:
+    """Return best video quality"""
+
+    for q in VIDEO_QUALITY_ORDER:
+        if q in urls:
+            return (q, urls[q])
+
+    return (None, None)
+
+
+def handle_video(
+    *,
+    client: httpx.Client,
+    headers: dict[str, str],
+    int_id: int,
+    title: str,
+    incremental_id: int,
+    urls: dict[PostDataVideoURLsType, str],
+    failover_host: str | None = None,
+    filename: str,
+    user: str,
+    output_dir: Path,
+    width: int | None = None,
+    height: int | None = None,
+    duration: int | None = None,
+    ctx: ProgressContext,
+    force_redownload: bool = False,
+    db_conn: sqlite3.Connection | None = None,
+    retry: int = 0,
+) -> None:
+    """
+    Handle video downloads. Extension is not known, so has to be guessed with magic
+    """
+
+    if width is None or height is None:  # or duration is None:
+        ctx.progress.print("[yellow]Skipping downloading deleted video from CDN:[/yellow]", urls)
+        return
+
+    entry = f"boosty_{user}_{int_id}_{incremental_id}"
+
+    if not force_redownload and db_conn:
+        with db_conn as cur, suppress(ValueError, sqlite3.Error):
+            [[check]] = cur.execute(CHECK_ENTRY.format(entry=entry))
+            if check:
+                ctx.progress.print(f"[yellow]Skipping downloaded video ({width}x{height} {duration or 0}s):[/yellow]", urls, "(DB)")
+                return
+
+    quality, url = best_video(urls)
+    if not url or not quality:
+        ctx.progress.print("[red]Not found supported video quality[/red]", urls)
+        return
+
+    # ? retry using failover host
+    if retry >= 5 and failover_host:
+        url = re.sub(r"(?<=https:\/\/)[\w.\-]+(?=/)", failover_host, url)
+        ctx.progress.print("Trying downloading video using failover host:", failover_host)
+
+    try:
+        with client.stream("GET", url, headers=headers, timeout=60.0) as stream:
+            if stream.is_server_error:
+                ctx.progress.print("Get server error:", stream.status_code, "Retrying after 5 seconds...")
+                sleep(5.0)
+                handle_video(
+                    client=client,
+                    headers=headers,
+                    int_id=int_id,
+                    title=title,
+                    incremental_id=incremental_id,
+                    urls=urls,
+                    failover_host=failover_host,
+                    filename=filename,
+                    user=user,
+                    output_dir=output_dir,
+                    width=width,
+                    height=height,
+                    duration=duration,
+                    ctx=ctx,
+                    force_redownload=force_redownload,
+                    db_conn=db_conn,
+                    retry=retry + 1,
+                )
+                return
+            if not stream.is_success:
+                rich.inspect(stream, title="Downloading video error")
+                return
+
+            total = int(stream.headers["Content-Length"])
+
+            ctx.progress_download.start_task(ctx.download)
+            ctx.progress_download.update(ctx.download, total=total, visible=True)
+
+            iterator: Iterator[bytes] = stream.iter_bytes(chunk_size=16_384)
+
+            chunk: bytes = next(iterator)
+            mime_type: str = magic.from_buffer(chunk, mime=True)
+            extension: str = MIME_TO_EXTENSION.get(mime_type, "mp4")
+
+            path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}.{quality}.{extension}"
+
+            if not force_redownload and not db_conn and path.exists() and path.stat().st_size > 0:
+                ctx.progress.print(f"[yellow]Skipping downloaded video ({width}x{height} {duration or 0}s):[/yellow]", url)
+                return
+
+            ctx.progress.print(f"[green]Downloading ({width}x{height} {duration or 0}s):[/green]", url)
+
+            with path.open("wb") as f:
+                f.write(chunk)
+                for chunk in iterator:
+                    f.write(chunk)
+                    ctx.progress_download.update(ctx.download, completed=stream.num_bytes_downloaded)
+
+            ctx.progress_download.update(ctx.download, completed=0, visible=False)
+            ctx.progress_download.stop_task(ctx.download)
+    except httpx.TimeoutException:
+        ctx.progress.print(f"[red italic]Timeout exception: {url}[/red italic]")
+        return
+    except httpx.NetworkError as e:
+        rich.inspect(e, title=f"Network error: {url}")
+        return
+    except httpx.ProtocolError as e:
+        rich.inspect(e, title=f"Protocol error: {url}")
+        return
+    except httpx.StreamError as e:
+        rich.inspect(e, title=f"Streaming video error: {url}")
+        return
+
+    if db_conn:
+        with db_conn as cur, suppress(sqlite3.Error):
+            cur.execute(INSERT_ENTRY.format(entry=entry))
+            cur.commit()
+
+
+def handle_audio(
+    *,
+    client: httpx.Client,
+    headers: dict[str, str],
+    int_id: int,
+    title: str,
+    incremental_id: int,
+    url: str,
+    filename: str,
+    filename_fallback: str,
+    file_type: str | None = None,
+    size: int | None = None,
+    is_migrated: bool,
+    user: str,
+    output_dir: Path,
+    signed_query: str,
+    ctx: ProgressContext,
+    force_redownload: bool = False,
+    db_conn: sqlite3.Connection | None = None,
+) -> None:
+    """
+    Handle audio downloads. Extension is within a title, however if not, there is file_type in CAPS from API.
+    """
+
+    if size is None:
+        ctx.progress.print("[yellow]Skipping downloading deleted audio from CDN:[/yellow]", url)
+        return
+
+    if not filename:
+        filename = f"{filename_fallback}.{(file_type or "mp3").lower()}"
+
+    final_url = f"{url}{signed_query}&is_migrated={str(is_migrated).lower()}"
+    path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}"
+    entry = f"boosty_{user}_{int_id}_{incremental_id}"
+
+    if not force_redownload and db_conn:
+        with db_conn as cur, suppress(ValueError, sqlite3.Error):
+            [[check]] = cur.execute(CHECK_ENTRY.format(entry=entry))
+            if check:
+                ctx.progress.print(f"[yellow]Skipping downloaded audio ({size:_} B):[/yellow]", url, "(DB)")
+                return
+
+    try:
+        with client.stream("GET", final_url, headers=headers, timeout=60.0) as stream:
+            if stream.is_server_error:
+                ctx.progress.print("Get server error:", stream.status_code, "Retrying after 5 seconds...")
+                sleep(5.0)
+                handle_audio(
+                    client=client,
+                    headers=headers,
+                    int_id=int_id,
+                    title=title,
+                    incremental_id=incremental_id,
+                    url=url,
+                    filename=filename,
+                    filename_fallback=filename_fallback,
+                    file_type=file_type,
+                    size=size,
+                    is_migrated=is_migrated,
+                    user=user,
+                    output_dir=output_dir,
+                    signed_query=signed_query,
+                    ctx=ctx,
+                    force_redownload=force_redownload,
+                    db_conn=db_conn,
+                )
+                return
+            if not stream.is_success:
+                rich.inspect(stream, title="Downloading audio error")
+                # rich.inspect(stream.request)
+                return
+
+            with path.open("wb") as f:
+                total = int(stream.headers["Content-Length"])
+
+                ctx.progress_download.start_task(ctx.download)
+                ctx.progress_download.update(ctx.download, total=total, visible=True)
+                ctx.progress.print(f"[green]Downloading ({size:_} B):[/green]", final_url)
+
+                for chunk in stream.iter_bytes():
+                    f.write(chunk)
+                    ctx.progress_download.update(ctx.download, completed=stream.num_bytes_downloaded)
+
+                ctx.progress_download.update(ctx.download, completed=0, visible=False)
+                ctx.progress_download.stop_task(ctx.download)
+    except httpx.TimeoutException:
+        ctx.progress.print(f"[red italic]Timeout exception: {final_url}[/red italic]")
+        return
+    except httpx.NetworkError as e:
+        rich.inspect(e, title=f"Network error: {final_url}")
+        return
+    except httpx.ProtocolError as e:
+        rich.inspect(e, title=f"Protocol error: {final_url}")
+        return
+    except httpx.StreamError as e:
+        rich.inspect(e, title=f"Streaming audio error: {final_url}")
         return
 
     if db_conn:
@@ -583,6 +997,52 @@ def handle_posts(
 
                 # if "password" in parse_text(raw_text).lower():
                 #     found_password = True
+            elif d["type"] == "ok_video":
+                dl_tasks.append(
+                    partial(
+                        handle_video,
+                        client=client,
+                        headers=headers,
+                        int_id=int_id,
+                        title=title,
+                        incremental_id=incremental_id,
+                        urls={u["type"]: u["url"] for u in d["playerUrls"] if u["url"]},
+                        filename=d["id"],
+                        user=user,
+                        output_dir=output_dir,
+                        width=d.get("width"),
+                        height=d.get("height"),
+                        failover_host=d.get("failoverHost"),
+                        ctx=ctx,
+                        force_redownload=force_redownload,
+                        db_conn=db_conn,
+                    ),
+                )
+                incremental_id += 1
+            elif d["type"] == "audio_file":
+                dl_tasks.append(
+                    partial(
+                        handle_audio,
+                        client=client,
+                        headers=headers,
+                        int_id=int_id,
+                        title=title,
+                        incremental_id=incremental_id,
+                        url=d["url"],
+                        filename=d.get("title"),
+                        filename_fallback=d["id"],
+                        file_type=d.get("fileType"),
+                        is_migrated=d["isMigrated"],
+                        user=user,
+                        output_dir=output_dir,
+                        size=d.get("size"),
+                        ctx=ctx,
+                        signed_query=signed_query,
+                        force_redownload=force_redownload,
+                        db_conn=db_conn,
+                    ),
+                )
+                incremental_id += 1
             else:
                 ctx.progress.print("\n\n[red italic]Unsupported data type:[/red italic]", d["type"])
                 rich.inspect(d, title="Unsupported data example", docs=False)
@@ -724,7 +1184,7 @@ def archive_user(
             force_redownload=force_redownload,
             all_links=all_links,
             signed_query=signed_query,
-            db_conn=conn,
+            db_conn=conn if use_db else None,
             ctx=ctx,
         )
 
@@ -763,7 +1223,7 @@ def archive_user(
                 force_redownload=force_redownload,
                 all_links=all_links,
                 signed_query=signed_query,
-                db_conn=conn,
+                db_conn=conn if use_db else None,
                 ctx=ctx,
             )
 
