@@ -29,7 +29,7 @@ from rich.table import Table
 import rich.traceback
 import typer
 
-__version__ = "2024.10.01"
+__version__ = "2024.12.29"
 
 # ? API
 API_PREFIX = "https://api.boosty.to/v1/"
