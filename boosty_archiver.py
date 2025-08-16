@@ -190,7 +190,7 @@ class PostDataFile(TypedDict):
     type: Literal["file"]
     complete: bool
     id: str  # UUID
-    isMigrated: bool
+    isMigrated: NotRequired[bool]
     size: int
     title: str
     url: str  # NOTE: url is https://cdn.boosty.to/file/00000000-0000-0000-0000-0000000000000 need migrate to https://cdn.boosty.to/file/00000000-0000-0000-0000-0000000000000?user_id=0000000&content_id=00000000-0000-0000-0000-0000000000000&expire_time=0000000000&sign=0000000000000000000000000000000000000000000000000000000000000000&is_migrated=true
@@ -953,7 +953,7 @@ def handle_posts(
                         url=d["url"],
                         filename=clear_filename(d["title"]),
                         size=d["size"],
-                        is_migrated=d["isMigrated"],
+                        is_migrated=d.get("isMigrated", False),
                         user=user,
                         output_dir=output_dir,
                         ctx=ctx,
@@ -1032,7 +1032,7 @@ def handle_posts(
                         filename=d.get("title"),
                         filename_fallback=d["id"],
                         file_type=d.get("fileType"),
-                        is_migrated=d["isMigrated"],
+                        is_migrated=d.get("isMigrated", False),
                         user=user,
                         output_dir=output_dir,
                         size=d.get("size"),
