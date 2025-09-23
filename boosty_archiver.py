@@ -13,6 +13,32 @@ from functools import partial
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 import re
+# other imports
+
+# --- Helper functions ---
+def sanitize_filename(s: str) -> str:
+    s = str(s).strip().replace(" ", "_")
+    s = re.sub(r"[^\w\-_.]", "", s)
+    return s[:255]
+
+def build_path(output_dir: Path, post_id: int, post_date: str, ext: str, media_type: str = None) -> Path:
+    """
+    Build the file path based on post number and date.
+    post_date should be a string like '2025-09-23'.
+    media_type: 'images', 'videos', or 'audio'
+    """
+    filename = f"{post_id}_{post_date}.{ext}"
+    
+    if media_type:
+        output_dir = output_dir / media_type
+    output_dir.mkdir(exist_ok=True, parents=True)
+    
+    return output_dir / sanitize_filename(filename)
+
+# --- Your download logic ---
+# Example:
+output_dir = Path("downloads")
+file_path = build_path(output_dir, 123, "2025-09-23", "jpg", "images")
 import sqlite3
 from time import sleep
 
