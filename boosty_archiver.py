@@ -13,30 +13,6 @@ from functools import partial
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 import re
-from pathlib import Path
-from uuid import uuid4
-
-def sanitize_filename(s: str) -> str:
-    s = str(s).strip().replace(" ", "_")
-    s = re.sub(r"[^\w\-_.]", "", s)
-    return s[:255]
-
-def build_path(output_dir: Path, post_id: int, title: str, index: int,
-               filename: str, ext: str, uuid: str, quality: str = None,
-               media_type: str = None) -> Path:
-    title_sanitized = sanitize_filename(title)
-    filename_sanitized = sanitize_filename(filename)
-    
-    parts = [str(post_id), title_sanitized, str(index), filename_sanitized, uuid]
-    if quality:
-        parts.append(str(quality))
-    
-    final_name = "_".join(parts) + f".{ext}"
-    
-    # Optional: organize into media_type folder (images/videos/audio)
-    if media_type:
-        output_dir = output_dir / media_type
-    return output_dir / final_name
 import sqlite3
 from time import sleep
 
@@ -458,8 +434,6 @@ def handle_file(
     """
 
     final_url = f"{url}{signed_query}&is_migrated={str(is_migrated).lower()}"
-    file_name = sanitize_filename(f"{int_id}_{title}_{incremental_id}_{filename}")
-    path = output_dir / file_name
     path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}"
     entry = f"boosty_{user}_{int_id}_{incremental_id}"
 
@@ -611,9 +585,7 @@ def handle_image(
             mime_type: str = magic.from_buffer(chunk, mime=True)
             extension: str = MIME_TO_EXTENSION.get(mime_type, "png")
 
-            file_name = sanitize_filename(f"{int_id}_{title}_{incremental_id}_{filename}.{extension}")
-            path = output_dir / file_name
-
+            path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}.{extension}"
 
             if not force_redownload and not db_conn and path.exists() and path.stat().st_size == size:
                 ctx.progress.print(f"[yellow]Skipping downloaded image ({size:_} B):[/yellow]", url)
@@ -812,8 +784,7 @@ def handle_audio(
         filename = f"{filename_fallback}.{(file_type or "mp3").lower()}"
 
     final_url = f"{url}{signed_query}&is_migrated={str(is_migrated).lower()}"
-    path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}.{extension}"
-
+    path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}"
     entry = f"boosty_{user}_{int_id}_{incremental_id}"
 
     if not force_redownload and db_conn:
