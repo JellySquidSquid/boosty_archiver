@@ -13,6 +13,12 @@ from functools import partial
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 import re
+def sanitize_filename(filename):
+    # Remove illegal Windows characters and replace newlines with space
+    filename = re.sub(r'[<>:"/\\|?*\n]', '', filename)
+    # Optional: replace emojis or other non-ASCII characters
+    filename = re.sub(r'[^\x00-\x7F]+','', filename)
+    return filename
 import sqlite3
 from time import sleep
 
@@ -434,6 +440,8 @@ def handle_file(
     """
 
     final_url = f"{url}{signed_query}&is_migrated={str(is_migrated).lower()}"
+    file_name = sanitize_filename(f"{int_id}_{title}_{incremental_id}_{filename}")
+    path = output_dir / file_name
     path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}"
     entry = f"boosty_{user}_{int_id}_{incremental_id}"
 
@@ -585,7 +593,9 @@ def handle_image(
             mime_type: str = magic.from_buffer(chunk, mime=True)
             extension: str = MIME_TO_EXTENSION.get(mime_type, "png")
 
-            path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}.{extension}"
+            file_name = sanitize_filename(f"{int_id}_{title}_{incremental_id}_{filename}.{extension}")
+            path = output_dir / file_name
+
 
             if not force_redownload and not db_conn and path.exists() and path.stat().st_size == size:
                 ctx.progress.print(f"[yellow]Skipping downloaded image ({size:_} B):[/yellow]", url)
@@ -784,7 +794,8 @@ def handle_audio(
         filename = f"{filename_fallback}.{(file_type or "mp3").lower()}"
 
     final_url = f"{url}{signed_query}&is_migrated={str(is_migrated).lower()}"
-    path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}"
+    path = output_dir / f"{int_id}_{title}_{incremental_id}_{filename}.{extension}"
+
     entry = f"boosty_{user}_{int_id}_{incremental_id}"
 
     if not force_redownload and db_conn:
