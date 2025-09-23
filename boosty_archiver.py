@@ -38,7 +38,7 @@ def build_path(output_dir: Path, post_id: int, post_date: str, ext: str, media_t
 # --- Your download logic ---
 # Example:
 output_dir = Path("downloads")
-file_path = build_path(output_dir, 123, "2025-09-23", "jpg", "images")
+file_path = build_path(output_dir, post_id, post_date, ext, media_type)
 import sqlite3
 from time import sleep
 
