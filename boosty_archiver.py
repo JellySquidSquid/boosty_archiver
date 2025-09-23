@@ -13,12 +13,30 @@ from functools import partial
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 import re
-def sanitize_filename(filename):
-    # Remove illegal Windows characters and replace newlines with space
-    filename = re.sub(r'[<>:"/\\|?*\n]', '', filename)
-    # Optional: replace emojis or other non-ASCII characters
-    filename = re.sub(r'[^\x00-\x7F]+','', filename)
-    return filename
+from pathlib import Path
+from uuid import uuid4
+
+def sanitize_filename(s: str) -> str:
+    s = str(s).strip().replace(" ", "_")
+    s = re.sub(r"[^\w\-_.]", "", s)
+    return s[:255]
+
+def build_path(output_dir: Path, post_id: int, title: str, index: int,
+               filename: str, ext: str, uuid: str, quality: str = None,
+               media_type: str = None) -> Path:
+    title_sanitized = sanitize_filename(title)
+    filename_sanitized = sanitize_filename(filename)
+    
+    parts = [str(post_id), title_sanitized, str(index), filename_sanitized, uuid]
+    if quality:
+        parts.append(str(quality))
+    
+    final_name = "_".join(parts) + f".{ext}"
+    
+    # Optional: organize into media_type folder (images/videos/audio)
+    if media_type:
+        output_dir = output_dir / media_type
+    return output_dir / final_name
 import sqlite3
 from time import sleep
 
